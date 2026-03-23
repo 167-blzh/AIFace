@@ -11,7 +11,8 @@ import {
   Fold,
   User,
   Setting,
-  InfoFilled
+  InfoFilled,
+  Reading
 } from "@element-plus/icons-vue";
 import { useUserStore } from "@/stores/user";
 import { ElMessage, ElNotification } from "element-plus";
@@ -92,6 +93,13 @@ const showLoginReminder = () => {
           <el-icon><DataAnalysis /></el-icon>
           <template #title>
             <span>当前报告</span>
+          </template>
+        </el-menu-item>
+
+        <el-menu-item index="/learn">
+          <el-icon><Reading /></el-icon>
+          <template #title>
+            <span>学习推荐</span>
           </template>
         </el-menu-item>
       </el-menu>
