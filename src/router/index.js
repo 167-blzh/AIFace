@@ -1,55 +1,42 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Layout from '@/views/layout/LayoutIndex.vue'
-import Home from '@/views/Home/HomeIndex.vue'
-import JobSelect from '@/views/Jobselect/JobSelect.vue'
-import Login from '@/views/Login/LoginIndex.vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
-import History from '@/views/History/HistoryPage.vue'
-import Report from '@/views/Report/ReportPage.vue'
-import Interview from '@/views/Interview/interviewPage.vue'
 
 const routes = [
   {
     path: '/login',
     name: 'Login',
-    component: Login,
-    meta: { noAuth: true },
+    component: () => import('@/views/Login/LoginIndex.vue'),
+    meta: { noAuth: true }
   },
   {
     path: '/',
     component: Layout,
     redirect: '/',
     children: [
-      { path: '', name: 'Home', component: Home },
-      { path: 'job-select', name: 'JobSelect', component: JobSelect },
-      { path: 'interview', name: 'Interview', component: Interview },
-      { path: 'report', name: 'Report', component: Report },
-      { path: 'history', name: 'History', component: History },
-    ],
-  },
+      { path: '', name: 'Home', component: () => import('@/views/Home/HomeIndex.vue') },
+      { path: 'job-select', name: 'JobSelect', component: () => import('@/views/Jobselect/JobSelect.vue') },
+      { path: 'interview', name: 'Interview', component: () => import('@/views/Interview/interviewPage.vue') },
+      { path: 'report', name: 'Report', component: () => import('@/views/Report/ReportPage.vue') },
+      { path: 'history', name: 'History', component: () => import('@/views/History/HistoryPage.vue') },
+      { path: 'learn', name: 'Learn', component: () => import('@/views/Learn/LearnPage.vue') }
+    ]
+  }
 ]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes,
+  routes
 })
 
-// 路由守卫
 router.beforeEach((to, from, next) => {
   const userStore = useUserStore()
 
-  // 不需要登录
-  if (to.meta.noAuth) {
-    return next()
-  }
+  if (to.meta.noAuth) return next()
 
-  // 未登录 → 去登录
-  if (!userStore.isLogin()) {
-    return next('/login')
-  }
+  if (!userStore.isLogin()) return next('/login')
 
-  // 权限控制
   if (to.meta.role && userStore.userInfo.role !== to.meta.role) {
     ElMessage.error('无权限访问')
     return next('/')

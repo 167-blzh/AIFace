@@ -4,102 +4,79 @@
       <template #header>
         <div class="card-header">
           <h3 class="card-title">面试历史记录</h3>
-          <el-tag type="info" size="small" class="record-count">
-            共 {{ interviewStore.interviewHistory.length }} 条记录
-          </el-tag>
+          <div class="header-actions">
+            <el-select v-model="filterJob" placeholder="筛选岗位" clearable size="small" style="width: 140px">
+              <el-option label="Java后端开发" value="Java后端开发" />
+              <el-option label="Web前端开发" value="Web前端开发" />
+            </el-select>
+            <el-tag type="info" size="small">
+              共 {{ filteredHistory.length }} 条记录
+            </el-tag>
+          </div>
         </div>
       </template>
 
-      <!-- 无历史记录提示 -->
       <div class="empty-history" v-if="interviewStore.interviewHistory.length === 0">
-        <el-empty
-          :image-size="120"
-          description="暂无面试历史记录"
-        >
+        <el-empty :image-size="120" description="暂无面试历史记录">
           <el-button type="primary" size="large" @click="$router.push('/job-select')">
             开始首次面试
           </el-button>
         </el-empty>
       </div>
 
-      <!-- 历史记录表格 -->
       <el-table
         v-else
-        :data="interviewStore.interviewHistory"
+        :data="filteredHistory"
         style="width: 100%"
         border
         stripe
         :header-cell-style="{ background: '#fafafa', fontWeight: '600' }"
-        :cell-style="{ padding: '12px 0' }"
       >
-        <el-table-column prop="jobName" label="应聘岗位" width="200">
-          <template #default="scope">
-            <span class="job-name">{{ scope.row.jobName }}</span>
+        <el-table-column prop="jobName" label="面试岗位" width="180">
+          <template #default="{ row }">
+            <span class="job-name">{{ row.jobName }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="综合得分" width="150">
-          <template #default="scope">
-            <div class="score-container">
-              <el-rate
-                :model-value="scope.row.score / 20"
-                disabled
-                size="small"
-                show-score
-                text-color="#ff9900"
-                score-template="{value}分"
-              />
+        <el-table-column label="综合评分" width="100" align="center">
+          <template #default="{ row }">
+            <span class="score-text" :class="scoreClass(row.score)">{{ row.score }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="各维度" min-width="240">
+          <template #default="{ row }">
+            <div class="dim-bars" v-if="row.dimensions">
+              <div v-for="(dim, key) in row.dimensions" :key="key" class="dim-bar">
+                <span class="dim-label">{{ dimLabels[key] || key }}</span>
+                <el-progress
+                  :percentage="dim.score"
+                  :stroke-width="10"
+                  :color="dim.score >= 80 ? '#67c23a' : dim.score >= 60 ? '#e6a23c' : '#f56c6c'"
+                  :show-text="false"
+                  style="flex:1"
+                />
+                <span class="dim-score">{{ dim.score }}</span>
+              </div>
             </div>
+            <span v-else class="no-dim">—</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="duration" label="面试时长" width="130">
-          <template #default="scope">
-            <el-tag type="success" size="small">
-              {{ scope.row.duration }} 分钟
-            </el-tag>
+        <el-table-column prop="createTime" label="时间" width="180">
+          <template #default="{ row }">
+            <span class="time-text">{{ row.createTime }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="createTime" label="面试时间" width="200">
-          <template #default="scope">
-            <div class="time-info">
-              <el-icon><Clock /></el-icon>
-              <span>{{ scope.row.createTime }}</span>
-            </div>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="操作" width="180" fixed="right">
-          <template #default="scope">
-            <div class="action-buttons">
-              <el-button
-                type="primary"
-                size="small"
-                plain
-                @click="viewReport(scope.row)"
-              >
-                <el-icon><Document /></el-icon>
-                查看报告
-              </el-button>
-              <el-popconfirm
-                title="确定要删除这条面试记录吗？删除后无法恢复！"
-                confirm-button-text="确定"
-                cancel-button-text="取消"
-                @confirm="deleteRecord(scope.row)"
-              >
-                <template #reference>
-                  <el-button
-                    type="danger"
-                    size="small"
-                    plain
-                  >
-                    <el-icon><Delete /></el-icon>
-                    删除
-                  </el-button>
-                </template>
-              </el-popconfirm>
-            </div>
+        <el-table-column label="操作" width="160" fixed="right">
+          <template #default="{ row, $index }">
+            <el-button type="primary" size="small" plain @click="viewReport(row)">查看</el-button>
+            <el-popconfirm title="确定删除这条记录？" @confirm="deleteRecord($index)">
+              <template #reference>
+                <el-button type="danger" size="small" plain>删除</el-button>
+              </template>
+            </el-popconfirm>
           </template>
         </el-table-column>
       </el-table>
@@ -108,55 +85,60 @@
 </template>
 
 <script setup>
+import { ref, computed } from 'vue'
 import { useInterviewStore } from '@/stores/interview'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Document, Delete, Clock } from '@element-plus/icons-vue'
 
 const interviewStore = useInterviewStore()
 const router = useRouter()
+const filterJob = ref('')
 
-// 查看报告
+const dimLabels = {
+  technicalDepth: '技术',
+  logicExpression: '逻辑',
+  communicationSkill: '沟通',
+  jobFit: '匹配'
+}
+
+const filteredHistory = computed(() => {
+  if (!filterJob.value) return interviewStore.interviewHistory
+  return interviewStore.interviewHistory.filter((h) => h.jobName === filterJob.value)
+})
+
+const scoreClass = (score) => ({
+  'score-good': score >= 85,
+  'score-mid': score >= 70 && score < 85,
+  'score-low': score < 70
+})
+
 const viewReport = (row) => {
   interviewStore.currentReport = row
   router.push('/report')
 }
 
-// 删除记录
-const deleteRecord = (row) => {
-  // 过滤掉要删除的记录
-  interviewStore.interviewHistory = interviewStore.interviewHistory.filter(
-    item => item.createTime !== row.createTime
-  )
-
-  // 如果删除的是当前报告，清空当前报告
-  if (interviewStore.currentReport?.createTime === row.createTime) {
-    interviewStore.currentReport = null
-  }
-
-  ElMessage.success('面试记录删除成功！')
+const deleteRecord = (index) => {
+  interviewStore.deleteHistory(index)
+  ElMessage.success('已删除')
 }
 </script>
 
 <style scoped>
 .history-container {
   padding: 24px;
-  background-color: #f5f7fa;
+  background: #f0f2f5;
   min-height: calc(100vh - 60px);
 }
 
 .history-card {
   border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  border: none;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #ebeef5;
 }
 
 .card-title {
@@ -166,83 +148,59 @@ const deleteRecord = (row) => {
   color: #303133;
 }
 
-.record-count {
-  margin-top: 2px;
-}
-
-.empty-history {
-  padding: 60px 0;
-}
-
-.score-container {
+.header-actions {
   display: flex;
-  justify-content: center;
   align-items: center;
+  gap: 12px;
 }
 
-.job-name {
-  font-weight: 500;
-  color: #303133;
+.empty-history { padding: 60px 0; }
+
+.job-name { font-weight: 500; color: #303133; }
+
+.score-text { font-size: 20px; font-weight: 700; }
+.score-good { color: #67c23a; }
+.score-mid { color: #e6a23c; }
+.score-low { color: #f56c6c; }
+
+.dim-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.time-info {
+.dim-bar {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.dim-label {
+  font-size: 12px;
   color: #909399;
+  width: 28px;
+  flex-shrink: 0;
 }
 
-.action-buttons {
-  display: flex;
-  gap: 8px;
+.dim-score {
+  font-size: 12px;
+  font-weight: 600;
+  color: #606266;
+  width: 24px;
+  text-align: right;
 }
 
-.action-buttons .el-button {
-  margin-right: 0 !important;
-  height: 32px;
-  font-size: 13px;
-}
+.no-dim { color: #c0c4cc; }
 
-.el-table {
-  border-radius: 8px;
-}
+.time-text { font-size: 13px; color: #909399; }
 
-.el-table :deep(.el-table__header) {
-  th {
-    background-color: #fafafa !important;
-    color: #606266;
-    font-weight: 600;
-  }
-}
-
-.el-table :deep(.el-table__row) {
-  &:hover > td {
-    background-color: #f8f9ff;
-  }
+:deep(.el-card__header) {
+  padding: 14px 20px;
+  background: #fafafa;
 }
 
 @media (max-width: 768px) {
-  .history-container {
-    padding: 16px;
-  }
-
-  .card-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .el-table {
-    font-size: 14px;
-  }
-
-  .action-buttons {
-    flex-direction: column;
-  }
-
-  .action-buttons .el-button {
-    width: 100%;
-    margin-bottom: 8px;
-  }
+  .history-container { padding: 16px; }
+  .card-header { flex-direction: column; align-items: flex-start; gap: 10px; }
 }
 </style>
